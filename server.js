@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
 const webpush = require('web-push');
@@ -10,10 +9,19 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS configuration for Vercel frontend
+const corsOptions = {
+  origin: [
+    'https://efootball-beryl.vercel.app',
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
 // ==================== SUPABASE ====================
 const supabaseAdmin = createClient(
@@ -24,7 +32,7 @@ const supabaseAdmin = createClient(
 // ==================== RESEND EMAIL ====================
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// ==================== DEFAULT PLAYERS (optional) ====================
+// ==================== DEFAULT PLAYERS ====================
 const DEFAULT_PLAYERS = [
   { id: 1, name: 'alwaysresistance', team: 'Kenya', photo: 'https://i.ibb.co/0jmt3HXf/alwaysresistance.jpg', strength: 3138, team_color: '#000000', default_photo: 'https://i.ibb.co/0jmt3HXf/alwaysresistance.jpg' },
   { id: 2, name: 'lildrip035', team: 'Chelsea', photo: 'https://i.ibb.co/CcXdyfc/lildrip035.jpg', strength: 3100, team_color: '#034694', default_photo: 'https://i.ibb.co/CcXdyfc/lildrip035.jpg' },
@@ -44,7 +52,8 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     port: PORT,
-    database: 'Supabase'
+    database: 'Supabase',
+    frontend: 'https://efootball-beryl.vercel.app'
   });
 });
 
@@ -121,51 +130,77 @@ webpush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY
 );
 
-// Temporary in-memory storage
-let subscriptions = [];
+// Save subscription to Supabase
+app.post("/api/save-subscription", async (req, res) => {
+  try {
+    const subscription = req.body;
 
-// Save subscription
-app.post("/api/save-subscription", (req, res) => {
-  const subscription = req.body;
-  subscriptions.push(subscription);
-  console.log("✅ New push subscription saved");
-  res.status(201).json({ message: "Subscription saved successfully" });
+    // Check if already exists
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("*")
+      .eq("endpoint", subscription.endpoint)
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      throw fetchError;
+    }
+
+    if (!existing) {
+      const { data, error } = await supabaseAdmin
+        .from("push_subscriptions")
+        .insert([{ endpoint: subscription.endpoint, keys: subscription.keys }]);
+
+      if (error) throw error;
+    }
+
+    console.log("✅ New push subscription saved");
+    res.status(201).json({ message: "Subscription saved successfully" });
+
+  } catch (error) {
+    console.error("❌ Failed to save subscription:", error.message);
+    res.status(500).json({ message: "Failed to save subscription", error: error.message });
+  }
 });
 
 // Send notification to all subscribers
 app.post("/api/send-notification", async (req, res) => {
-  const { title, body, url } = req.body;
-  const payload = JSON.stringify({
-    title: title || "eFootball League 2025",
-    body: body || "Match update available!",
-    url: url || "https://tournament.kishtechsite.online/"
-  });
+  try {
+    const { title, body, url } = req.body;
+    const payload = JSON.stringify({
+      title: title || "eFootball League 2025",
+      body: body || "Match update available!",
+      url: url || "https://efootball-beryl.vercel.app/"
+    });
 
-  const failed = [];
+    // Fetch all subscriptions from Supabase
+    const { data: subscriptions, error } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("*");
 
-  for (const sub of subscriptions) {
-    try {
-      await webpush.sendNotification(sub, payload);
-    } catch (err) {
-      console.error("❌ Failed to send notification:", err.message);
-      failed.push(sub);
+    if (error) throw error;
+
+    const failed = [];
+
+    for (const sub of subscriptions) {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: sub.keys },
+          payload
+        );
+      } catch (err) {
+        console.error("❌ Failed to send notification:", err.message);
+        failed.push(sub.endpoint);
+      }
     }
+
+    res.json({ success: true, message: "Notifications sent!", failedCount: failed.length });
+
+  } catch (error) {
+    console.error("❌ Sending notification failed:", error.message);
+    res.status(500).json({ message: "Failed to send notifications", error: error.message });
   }
-
-  res.json({ success: true, message: "Notifications sent!", failedCount: failed.length });
 });
-
-
-// ==================== STATIC FILES ====================
-app.use(express.static(path.join(__dirname, 'public'))); 
-
-app.use('/css', express.static(path.join(__dirname, 'public/css')));
-app.use('/js', express.static(path.join(__dirname, 'public/js')));
-app.use('/icons', express.static(path.join(__dirname, 'public/icons')));
-
-app.get('/admin.html', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
 
 // ==================== ERROR HANDLING ====================
 app.use((err, req, res, next) => {
@@ -177,11 +212,22 @@ app.use((err, req, res, next) => {
   });
 });
 
+// 404 handler for API routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'API endpoint not found',
+    message: 'The requested API endpoint does not exist'
+  });
+});
+
 // ==================== START SERVER ====================
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Frontend: http://localhost:${PORT}`);
-  console.log(`🔗 API: http://localhost:${PORT}/api/health`);
+  console.log(`🚀 Backend server running on port ${PORT}`);
+  console.log(`🔗 Health check: https://efootball-backend-91me.onrender.com/api/health`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🗄️ Database: Supabase (Client-side)`);
+  console.log(`🎯 Frontend: https://efootball-beryl.vercel.app`);
+  console.log(`🗄️ Database: Supabase`);
+  console.log(`📧 Email: Resend configured`);
+  console.log(`🔔 Notifications: Push notifications ready`);
 });
