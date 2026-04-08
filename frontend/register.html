@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - eFootball League 2026</title>
+    <link rel="stylesheet" href="/css/toast.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .username-wrapper {
+            position: relative;
+        }
+
+        .username-status {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 18px;
+        }
+
+        .logo-preview {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .logo-preview img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .error-text {
+            color: #ef4444;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚽ Create Account</h1>
+            <p>Join eFootball League 2026</p>
+        </div>
+
+        <div class="logo-preview">
+            <img id="logoPreview" src="https://api.dicebear.com/7.x/initials/svg?seed=Team" alt="Team Logo">
+        </div>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="username">Username *</label>
+                <div class="username-wrapper">
+                    <input type="text" id="username" required placeholder="e.g. pro_gamer254">
+                    <span class="username-status" id="usernameStatus"></span>
+                </div>
+                <div class="error-text" id="usernameError"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email *</label>
+                <input type="email" id="email" required placeholder="your@email.com">
+            </div>
+
+            <div class="form-group">
+                <label for="team">Team Name *</label>
+                <input type="text" id="team" required placeholder="Enter your team name" maxlength="30">
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone (Optional)</label>
+                <input type="tel" id="phone" placeholder="254712345678">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password *</label>
+                <input type="password" id="password" required placeholder="Min 6 characters">
+            </div>
+
+            <div class="form-group">
+                <label for="confirmPassword">Confirm Password *</label>
+                <input type="password" id="confirmPassword" required placeholder="Repeat password">
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">Create Account</button>
+        </form>
+
+        <div class="footer">
+            Already have an account? <a href="/login">Login here</a>
+        </div>
+    </div>
+
+    <script src="/js/toast.js"></script>
+    <script>
+        const form = document.getElementById('registerForm');
+        const usernameInput = document.getElementById('username');
+        const usernameStatus = document.getElementById('usernameStatus');
+        const usernameError = document.getElementById('usernameError');
+        const teamInput = document.getElementById('team');
+        const logoPreview = document.getElementById('logoPreview');
+        const submitBtn = document.getElementById('submitBtn');
+
+        let debounceTimer;
+        let isUsernameAvailable = false;
+
+        // Live username check
+        usernameInput.addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            const username = e.target.value.toLowerCase().trim();
+
+            if (username.length < 3) {
+                usernameStatus.textContent = '';
+                usernameError.textContent = '';
+                isUsernameAvailable = false;
+                return;
+            }
+
+            // Validate format
+            const usernameRegex = /^[a-z0-9_]{3,15}$/;
+            if (!usernameRegex.test(username)) {
+                usernameStatus.textContent = '❌';
+                usernameError.textContent = 'Only lowercase letters, numbers, and underscore';
+                isUsernameAvailable = false;
+                return;
+            }
+
+            usernameError.textContent = '';
+            usernameStatus.textContent = '⏳';
+
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/check-username?username=${username}`);
+                    const data = await response.json();
+
+                    if (data.available) {
+                        usernameStatus.textContent = '✅';
+                        usernameError.textContent = '';
+                        isUsernameAvailable = true;
+                    } else {
+                        usernameStatus.textContent = '❌';
+                        usernameError.textContent = data.message || 'Username taken';
+                        isUsernameAvailable = false;
+                    }
+                } catch (error) {
+                    usernameStatus.textContent = '❌';
+                    usernameError.textContent = 'Failed to check username';
+                    isUsernameAvailable = false;
+                }
+            }, 500);
+        });
+
+        // Update logo preview
+        teamInput.addEventListener('input', (e) => {
+            const team = e.target.value.trim();
+            if (team.length >= 2) {
+                logoPreview.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(team)}`;
+            } else {
+                logoPreview.src = 'https://api.dicebear.com/7.x/initials/svg?seed=Team';
+            }
+        });
+
+        // Form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = usernameInput.value.toLowerCase().trim();
+            const email = document.getElementById('email').value.trim();
+            const team = teamInput.value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // Validation
+            if (!isUsernameAvailable) {
+                return toast.error('Please choose an available username');
+            }
+
+            if (team.length < 2) {
+                return toast.error('Team name must be at least 2 characters');
+            }
+
+            if (password.length < 6) {
+                return toast.error('Password must be at least 6 characters');
+            }
+
+            if (password !== confirmPassword) {
+                return toast.error('Passwords do not match');
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating Account...';
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, team, phone, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    toast.success('Account created successfully! Redirecting to login...');
+                    localStorage.setItem('token', data.token);
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                } else {
+                    toast.error(data.message || 'Registration failed');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Create Account';
+                }
+            } catch (error) {
+                toast.error('Registration failed. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Create Account';
+            }
+        });
+    </script>
+</body>
+</html>
